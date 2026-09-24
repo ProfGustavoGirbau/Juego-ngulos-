@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Emboca la Pelota</title>
+<style>
+  :root {
+    --bg-color: #000000;
+    --accent: #c0392b;
+    --text: #ffffff;
+    --shadow: rgba(0,0,0,0.35);
+    --panel: rgba(20, 20, 25, 0.72);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg-color); }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    position: fixed;
+    width: 100%;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  #hud {
+    position: absolute;
+    top: env(safe-area-inset-top, 0px);
+    left: 0;
+    width: 100%;
+    display: none;
+    flex-direction: column;
+    z-index: 10;
+    pointer-events: none;
+  }
+  #hudTop {
+    display: flex;
+    justify-content: space-between;
+    padding: 16px 22px 4px;
+    color: var(--text);
+    font-weight: 600;
+    text-shadow: 0 2px 6px var(--shadow);
+  }
+  #hudTop .stat { font-size: 15px; letter-spacing: 0.3px; text-align: left; }
+  #hudTop .stat span { display: block; font-size: 24px; margin-top: 2px; }
+  #hudTop .stat.right { text-align: right; }
+  #scoreboard {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    padding: 2px 16px 8px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.85);
+    text-shadow: 0 1px 4px var(--shadow);
+  }
+  #scoreboard .entry.current { color: #fff; font-weight: 700; text-decoration: underline; }
+  #resultBanner {
+    position: absolute;
+    left: 50%;
+    top: 38%;
+    transform: translate(-50%, -50%) scale(0.6);
+    font-size: 28px;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 2px 3px rgba(0,0,0,0.4);
+    padding: 14px 26px;
+    border-radius: 20px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 15;
+    text-align: center;
+    max-width: 85vw;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+  }
+  #resultBanner.made { background: linear-gradient(180deg, #34D399, #059669); }
+  #resultBanner.miss { background: linear-gradient(180deg, #FB7185, #DC2626); }
+  #resultBanner.show {
+    animation: bannerPop 0.55s cubic-bezier(.2,1.4,.4,1) forwards;
+  }
+  @keyframes bannerPop {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+    55% { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+    75% { transform: translate(-50%, -50%) scale(0.97); }
+    100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    background: rgba(20, 12, 6, 0.55);
+    backdrop-filter: blur(2px);
+    padding: 24px;
+  }
+  .screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    background: var(--panel);
+    border-radius: 18px;
+    padding: 28px 26px;
+    max-width: 340px;
+    width: 100%;
+    color: var(--text);
+    text-align: center;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+  }
+  .screen h1 { font-size: 24px; margin-bottom: 2px; }
+  .screen p { font-size: 14px; opacity: 0.85; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 100%; }
+  button.pill {
+    pointer-events: auto;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 12px 22px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  button.pill.secondary { background: rgba(255,255,255,0.18); }
+  button.pill:active { transform: scale(0.96); }
+  #angleOptions { gap: 10px; }
+  .angle-opt {
+    pointer-events: auto;
+    flex: 1;
+    min-width: 70px;
+    border: none;
+    border-radius: 16px;
+    padding: 16px 4px;
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+    cursor: pointer;
+    text-shadow: 0 2px 2px rgba(0,0,0,0.25);
+    transition: transform .08s ease, box-shadow .08s ease;
+  }
+  .angle-opt:nth-child(1) { background: linear-gradient(180deg, #33D6E8, #22E5C9); box-shadow: 0 5px 0 #0FBFA6, 0 8px 14px rgba(0,0,0,0.25); }
+  .angle-opt:nth-child(2) { background: linear-gradient(180deg, #FF6FA0, #FF3D7F); box-shadow: 0 5px 0 #D81E62, 0 8px 14px rgba(0,0,0,0.25); }
+  .angle-opt:nth-child(3) { background: linear-gradient(180deg, #D4FF6E, #B4FF39); color: #204000; text-shadow: none; box-shadow: 0 5px 0 #8FDA1A, 0 8px 14px rgba(0,0,0,0.25); }
+  .angle-opt:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.25); }
+  .angle-opt:disabled { opacity: 0.55; }
+  input.nameInput, select.nameInput {
+    pointer-events: auto;
+    width: 100%;
+    font-size: 16px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: none;
+    outline: none;
+    text-align: center;
+  }
+  #resultsList { width: 100%; display: flex; flex-direction: column; gap: 6px; margin: 4px 0; }
+  #resultsList .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.08);
+    font-size: 15px;
+  }
+  #resultsList .row.winner { background: rgba(255,214,102,0.25); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="hudTop">
+    <div class="stat">Turno<span id="turnName">-</span></div>
+    <div class="stat right">Tiro<span id="shotDisplay">1/4</span></div>
+  </div>
+  <div id="scoreboard"></div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+<div id="resultBanner"></div>
+<div id="resultBanner"></div>
+
+<div id="overlay">
+
+  <div class="screen" id="screenCount">
+    <h1>Emboca la Pelota</h1>
+    <p>¿Cuántos juegan?</p>
+    <div class="btn-row">
+      <button class="pill" data-count="2">2</button>
+      <button class="pill" data-count="3">3</button>
+      <button class="pill" data-count="4">4</button>
+    </div>
+  </div>
+
+  <div class="screen" id="screenNames">
+    <h1>Nombres</h1>
+    <p>4 tiros por jugador. ¡El que más embosca gana!</p>
+    <select class="nameInput" id="nameInput0"></select>
+    <select class="nameInput" id="nameInput1"></select>
+    <select class="nameInput" id="nameInput2"></select>
+    <select class="nameInput" id="nameInput3"></select>
+    <button class="pill" id="startBtn">Comenzar</button>
+  </div>
+
+  <div class="screen" id="screenTurn">
+    <h1 id="turnTitle">Turno de...</h1>
+    <p>Pasale el celular y tocá para continuar</p>
+    <button class="pill" id="continueBtn">Continuar</button>
+  </div>
+
+  <div class="screen" id="screenQuiz">
+    <h1>¿CUÁNTO MIDE ESTE ÁNGULO?</h1>
+    <canvas id="angleCanvas" style="background:#2b2140;border-radius:16px;max-width:100%;"></canvas>
+    <div class="btn-row" id="angleOptions"></div>
+    <p id="quizFeedback" style="min-height:20px;font-weight:700;"></p>
+    <button class="pill" id="quizContinueBtn" style="display:none;">Continuar</button>
+  </div>
+
+  <div class="screen" id="screenResults">
+    <h1>¡Juego terminado!</h1>
+    <div id="resultsList"></div>
+    <button class="pill" id="replayBtn">Jugar de nuevo</button>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const hud = document.getElementById('hud');
+  const turnNameEl = document.getElementById('turnName');
+  const shotDisplayEl = document.getElementById('shotDisplay');
+  const scoreboardEl = document.getElementById('scoreboard');
+  const resultBanner = document.getElementById('resultBanner');
+  const overlay = document.getElementById('overlay');
+  const angleCanvas = document.getElementById('angleCanvas');
+  const resultBannerEl = document.getElementById('resultBanner');
+  const angleOptionsEl = document.getElementById('angleOptions');
+  const quizFeedbackEl = document.getElementById('quizFeedback');
+  const quizContinueBtn = document.getElementById('quizContinueBtn');
+  const screens = {
+    count: document.getElementById('screenCount'),
+    names: document.getElementById('screenNames'),
+    turn: document.getElementById('screenTurn'),
+    quiz: document.getElementById('screenQuiz'),
+    results: document.getElementById('screenResults')
+  };
+  const turnTitleEl = document.getElementById('turnTitle');
+  const resultsListEl = document.getElementById('resultsList');
+
+  const SHOTS_PER_PLAYER = 4;
+  const GRAVITY = 1500;
+
+  const NAMES = [
+    'Lío', 'Mia', 'Ari', 'Santi A', 'Luna', 'Joan', 'Tizi', 'Bayron', 'Bruno',
+    'Mate C', 'Feli', 'Mate D', 'Zoe', 'Genaro', 'Lucas', 'Agus', 'Angel',
+    'Kevin', 'Isaias', 'Santi K', 'Josefina', 'Alma', 'Sebas', 'Lorien',
+    'Solange', 'Braian', 'Aron'
+  ];
+
+  const nameSelects = [0, 1, 2, 3].map(i => document.getElementById('nameInput' + i));
+  nameSelects.forEach(sel => {
+    sel.innerHTML = NAMES.map(n => `<option value="${n}">${n}</option>`).join('');
+    sel.addEventListener('change', updateNameOptions);
+  });
+  nameSelects.forEach((sel, i) => { sel.selectedIndex = i % NAMES.length; });
+
+  function updateNameOptions() {
+    const visible = nameSelects.filter(sel => sel.style.display !== 'none');
+    const chosen = visible.map(sel => sel.value);
+    visible.forEach(sel => {
+      Array.from(sel.options).forEach(opt => {
+        opt.disabled = chosen.includes(opt.value) && opt.value !== sel.value;
+      });
+    });
+  }
+  updateNameOptions();
+
+  let W = 0, H = 0, DPR = 1;
+  let maxDragDist = 130;
+  let launchPower = 9.5;
+
+  function resizeCanvas() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    maxDragDist = Math.min(W, H) * 0.22;
+    const requiredVy = Math.sqrt(2 * GRAVITY * (H * 0.95));
+    launchPower = requiredVy / maxDragDist;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  // --- Estado del juego ---
+  let selectedCount = 2;
+  let players = [];
+  let currentPlayerIndex = 0;
+  let launches = 0;
+  let running = false;
+  let paused = false;
+
+  const ball = {
+    x: 0, y: 0, radius: 22,
+    vx: 0, vy: 0,
+    gravity: GRAVITY,
+    launched: false,
+    dragging: false,
+    startX: 0, startY: 0
+  };
+
+  const basket = {
+    x: 0, y: 0, width: 90, height: 16
+  };
+
+  function ballRestX() { return W / 2; }
+  function ballRestY() { return H - Math.max(120, H * 0.16); }
+
+  function placeBasket() {
+    const margin = 30;
+    const maxWidth = Math.max(60, 95 - Math.floor(launches / 4) * 4);
+    basket.width = Math.round(Math.max(55, Math.random() * maxWidth));
+    basket.x = Math.random() * (W - basket.width - margin * 2) + margin;
+    basket.y = Math.random() * (H * 0.38) + H * 0.12;
+  }
+
+  function resetBall() {
+    ball.x = ballRestX();
+    ball.y = ballRestY();
+    ball.vx = 0;
+    ball.vy = 0;
+    ball.launched = false;
+    ball.dragging = false;
+  }
+
+  function newRound() {
+    resetBall();
+    placeBasket();
+  }
+
+  // --- Flujo de pantallas ---
+  function showScreen(name) {
+    Object.keys(screens).forEach(k => { screens[k].style.display = (k === name) ? 'flex' : 'none'; });
+    overlay.style.display = 'flex';
+    hud.style.display = 'none';
+    running = false;
+  }
+
+  function hideOverlayForPlay() {
+    overlay.style.display = 'none';
+    hud.style.display = 'flex';
+    running = true;
+  }
+
+  function updateHud() {
+    const p = players[currentPlayerIndex];
+    turnNameEl.textContent = p.name;
+    shotDisplayEl.textContent = `${p.shots + 1}/${SHOTS_PER_PLAYER}`;
+    scoreboardEl.innerHTML = players.map((pl, i) =>
+      `<span class="entry${i === currentPlayerIndex ? ' current' : ''}">${escapeHtml(pl.name)}: ${pl.score}</span>`
+    ).join('');
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function beginCurrentPlayerTurn() {
+    hideOverlayForPlay();
+    newRound();
+    paused = false;
+    updateHud();
+  }
+
+  function showTurnIntro(index) {
+    currentPlayerIndex = index;
+    turnTitleEl.textContent = `Turno de ${players[index].name}`;
+    showScreen('turn');
+  }
+
+  function showResultBanner(made) {
+    resultBanner.textContent = made ? '🏀 ¡ENCESTASTE!' : '❌ ¡Casi!';
+    resultBanner.classList.remove('show', 'made', 'miss');
+    void resultBanner.offsetWidth; // reinicia la animación
+    resultBanner.classList.add(made ? 'made' : 'miss', 'show');
+  }
+
+  function resolveShot(made) {
+    paused = true; // congela la pelota en el lugar donde terminó el tiro
+    const p = players[currentPlayerIndex];
+    if (made) p.score++;
+    p.shots++;
+    updateHud();
+    showResultBanner(made);
+    setTimeout(() => {
+      resultBanner.classList.remove('show');
+      showAngleQuiz();
+    }, 900);
+  }
+
+  function advanceTurn() {
+    const remaining = players.filter(pl => pl.shots < SHOTS_PER_PLAYER).length;
+    if (remaining === 0) {
+      showResults();
+      return;
+    }
+    let next = currentPlayerIndex;
+    do {
+      next = (next + 1) % players.length;
+    } while (players[next].shots >= SHOTS_PER_PLAYER);
+    showTurnIntro(next);
+  }
+
+  // --- Cuestionario de ángulos ---
+  function pickRandomAngle() {
+    const options = [];
+    for (let a = 10; a <= 170; a += 5) options.push(a);
+    return options[Math.floor(Math.random() * options.length)];
+  }
+
+  function pickDistractor(angle, supplement) {
+    const candidates = [];
+    for (let a = 5; a <= 175; a += 5) {
+      if (a !== angle && a !== supplement) candidates.push(a);
+    }
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  const ANGLE_W = 320, ANGLE_H = 230;
+  function setupAngleCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    angleCanvas.width = ANGLE_W * dpr;
+    angleCanvas.height = ANGLE_H * dpr;
+    angleCanvas.style.width = ANGLE_W + 'px';
+    angleCanvas.style.height = ANGLE_H + 'px';
+    angleCanvas.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  setupAngleCanvas();
+
+  function drawArrow(c, x1, y1, x2, y2, color) {
+    const headLen = 20, headWidth = 14;
+    const dx = x2 - x1, dy = y2 - y1;
+    const dist = Math.hypot(dx, dy);
+    const ux = dx / dist, uy = dy / dist;
+    const shaftEndX = x2 - ux * headLen * 0.6;
+    const shaftEndY = y2 - uy * headLen * 0.6;
+
+    c.beginPath();
+    c.moveTo(x1, y1);
+    c.lineTo(shaftEndX, shaftEndY);
+    c.strokeStyle = color;
+    c.lineWidth = 8;
+    c.lineCap = 'round';
+    c.stroke();
+
+    const perpX = -uy, perpY = ux;
+    const baseX = x2 - ux * headLen, baseY = y2 - uy * headLen;
+    c.beginPath();
+    c.moveTo(x2, y2);
+    c.lineTo(baseX + perpX * headWidth / 2, baseY + perpY * headWidth / 2);
+    c.lineTo(baseX - perpX * headWidth / 2, baseY - perpY * headWidth / 2);
+    c.closePath();
+    c.fillStyle = color;
+    c.fill();
+  }
+
+  function drawProtractor(angle) {
+    const c = angleCanvas.getContext('2d');
+    const W2 = ANGLE_W, H2 = ANGLE_H;
+    c.clearRect(0, 0, W2, H2);
+    c.fillStyle = '#2b2140';
+    c.fillRect(0, 0, W2, H2);
+
+    const cx = W2 * 0.4, cy = H2 - 40;
+    const R = Math.min(W2 - 70, H2 - 60);
+    const cream = '#F4F1EA';
+
+    const rad = angle * Math.PI / 180;
+    drawArrow(c, cx, cy, cx + R * Math.cos(rad), cy - R * Math.sin(rad), cream);
+    drawArrow(c, cx, cy, cx + R, cy, cream);
+
+    c.beginPath();
+    c.arc(cx, cy, 6, 0, Math.PI * 2);
+    c.fillStyle = cream;
+    c.fill();
+  }
+
+  function showAngleQuiz() {
+    const angle = pickRandomAngle();
+    const supplement = 180 - angle;
+    const distractor = pickDistractor(angle, supplement);
+    const options = shuffle([angle, supplement, distractor]);
+
+    drawProtractor(angle);
+    quizFeedbackEl.textContent = '';
+    quizContinueBtn.style.display = 'none';
+    angleOptionsEl.innerHTML = '';
+
+    options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'angle-opt';
+      btn.textContent = opt + '°';
+      btn.addEventListener('click', () => {
+        Array.from(angleOptionsEl.children).forEach(b => b.disabled = true);
+        if (opt === angle) {
+          players[currentPlayerIndex].score++;
+          quizFeedbackEl.textContent = '¡Correcto! +1 punto';
+        } else {
+          quizFeedbackEl.textContent = `Incorrecto. Era ${angle}°`;
+        }
+        updateHud();
+        quizContinueBtn.style.display = 'inline-block';
+      }, { once: true });
+      angleOptionsEl.appendChild(btn);
+    });
+
+    showScreen('quiz');
+  }
+
+  quizContinueBtn.addEventListener('click', advanceTurn);
+
+  function showResults() {
+    const ranked = players.slice().sort((a, b) => b.score - a.score);
+    const topScore = ranked[0].score;
+    resultsListEl.innerHTML = ranked.map((p, i) =>
+      `<div class="row${p.score === topScore ? ' winner' : ''}">
+        <span>${i + 1}. ${escapeHtml(p.name)}</span>
+        <span>${p.score}/${SHOTS_PER_PLAYER}</span>
+      </div>`
+    ).join('');
+    showScreen('results');
+  }
+
+  // --- Pantalla de cantidad de jugadores ---
+  screens.count.querySelectorAll('button[data-count]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedCount = parseInt(btn.dataset.count, 10);
+      for (let i = 0; i < 4; i++) {
+        const input = document.getElementById('nameInput' + i);
+        input.style.display = i < selectedCount ? 'block' : 'none';
+      }
+      updateNameOptions();
+      showScreen('names');
+    });
+  });
+
+  document.getElementById('startBtn').addEventListener('click', () => {
+    players = [];
+    for (let i = 0; i < selectedCount; i++) {
+      const input = document.getElementById('nameInput' + i);
+      const name = (input.value || '').trim() || `Jugador ${i + 1}`;
+      players.push({ name, score: 0, shots: 0 });
+    }
+    launches = 0;
+    showTurnIntro(0);
+  });
+
+  document.getElementById('continueBtn').addEventListener('click', beginCurrentPlayerTurn);
+
+  document.getElementById('replayBtn').addEventListener('click', () => {
+    showScreen('count');
+  });
+
+  // --- Controles (Pointer Events unifican mouse y touch) ---
+  function localPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  function onPointerDown(e) {
+    if (!running || ball.launched) return;
+    const pos = localPos(e);
+    const dist = Math.hypot(pos.x - ball.x, pos.y - ball.y);
+    if (dist < ball.radius + 26) {
+      ball.dragging = true;
+      ball.startX = ball.x;
+      ball.startY = ball.y;
+      canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId);
+    }
+  }
+
+  function onPointerMove(e) {
+    if (!ball.dragging) return;
+    const pos = localPos(e);
+    const dx = pos.x - ball.startX;
+    const dy = pos.y - ball.startY;
+    const dist = Math.hypot(dx, dy);
+    if (dist < maxDragDist) {
+      ball.x = pos.x;
+      ball.y = pos.y;
+    } else {
+      const angle = Math.atan2(dy, dx);
+      ball.x = ball.startX + Math.cos(angle) * maxDragDist;
+      ball.y = ball.startY + Math.sin(angle) * maxDragDist;
+    }
+  }
+
+  function onPointerUp() {
+    if (!ball.dragging) return;
+    ball.dragging = false;
+    ball.launched = true;
+    launches++;
+    ball.vx = (ball.startX - ball.x) * launchPower;
+    ball.vy = (ball.startY - ball.y) * launchPower;
+  }
+
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerUp);
+
+  // --- Física y colisiones ---
+  function stepPhysics(dt) {
+    if (!ball.launched) return;
+
+    const prevY = ball.y;
+    ball.vy += ball.gravity * dt;
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+
+    if (ball.x - ball.radius < 0) {
+      ball.x = ball.radius;
+      ball.vx *= -0.75;
+    } else if (ball.x + ball.radius > W) {
+      ball.x = W - ball.radius;
+      ball.vx *= -0.75;
+    }
+    if (ball.y - ball.radius < 0) {
+      ball.y = ball.radius;
+      ball.vy *= -0.6;
+    }
+
+    const rimY = basket.y;
+    const crossedRim = ball.vy > 0 && prevY - ball.radius <= rimY && ball.y - ball.radius >= rimY - 4;
+    const withinScoreZone = ball.x > basket.x + ball.radius * 0.4 && ball.x < basket.x + basket.width - ball.radius * 0.4;
+    if (crossedRim) {
+      if (withinScoreZone) {
+        resolveShot(true);
+        return;
+      } else if (ball.x > basket.x - 10 && ball.x < basket.x + basket.width + 10) {
+        ball.y = rimY - ball.radius;
+        ball.vy *= -0.5;
+        ball.vx += (ball.x < basket.x + basket.width / 2 ? -1 : 1) * 80;
+      }
+    }
+
+    if (ball.y - ball.radius > H) {
+      resolveShot(false);
+    }
+  }
+
+  // --- Dibujo ---
+  function drawBackground() {
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    drawBackground();
+
+    if (!running) return;
+
+    if (ball.dragging) {
+      ctx.beginPath();
+      ctx.setLineDash([6, 6]);
+      ctx.moveTo(ball.startX, ball.startY);
+      ctx.lineTo(ball.startX + (ball.startX - ball.x) * 2.2, ball.startY + (ball.startY - ball.y) * 2.2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(basket.x + 6, basket.y + basket.height, basket.width - 12, 46);
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(basket.x, basket.y, basket.width, basket.height);
+    ctx.fillStyle = '#9e2f22';
+    ctx.fillRect(basket.x, basket.y + basket.height - 4, basket.width, 4);
+
+    const ballGrad = ctx.createRadialGradient(
+      ball.x - ball.radius * 0.35, ball.y - ball.radius * 0.35, ball.radius * 0.2,
+      ball.x, ball.y, ball.radius
+    );
+    ballGrad.addColorStop(0, '#fff3d6');
+    ballGrad.addColorStop(1, '#f2a541');
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+    ctx.fillStyle = ballGrad;
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+  }
+
+  // --- Bucle principal (independiente de la tasa de refresco) ---
+  let lastTime = performance.now();
+  function gameLoop(now) {
+    const dt = Math.min((now - lastTime) / 1000, 0.032);
+    lastTime = now;
+    if (running && !paused) stepPhysics(dt);
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+
+  showScreen('count');
+  requestAnimationFrame(gameLoop);
+})();
+</script>
+
+</body>
+</html>
